@@ -1,7 +1,7 @@
 
 const CONFIG_APP = {
     APP: {
-        NAME: "MULTIPLUS-SCANNER",
+        NAME: "MULTIALL-PLUS[BETA]",
         VERSION: "1.0"
     }
 };
