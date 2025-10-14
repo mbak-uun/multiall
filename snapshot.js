@@ -293,40 +293,6 @@
       return resolved;
     }
 
-    async function ensureFullSnapshot(options = {}) {
-      const { silent = false, force = false } = options;
-      const snap = loadSnapshot();
-      const hasData = Object.keys(snap || {}).length > 0;
-
-      // Jika tidak dipaksa dan sudah ada data, tidak perlu melakukan apa-apa.
-      if (!force && hasData) return true;
-
-      const dataUrl = SNAPSHOT_SEED_URL;
-      if (!dataUrl || !/^https?:\/\//i.test(dataUrl)) return false;
-
-      const overlayVisible = $('#snapshot-overlay').is(':visible');
-      if (!silent && !overlayVisible) {
-        showOverlay(`Mengambil data awal untuk semua chain...`);
-        setOverlayPhase('Download', 1);
-        updateOverlayProgress(0);
-      }
-      try {
-        const data = await fetchJsonWithFallback(dataUrl);
-        // Panggil applySeedObject tanpa 'onlyChainKey' untuk mengimpor semua chain
-        const imported = await applySeedObject(data);
-        if (!silent) {
-          try { UIkit.notification(`✅ Database snapshot diperbarui (${imported || 0} item)`, { status: 'success' }); } catch(_) {}
-        }
-        return true;
-      } catch (e) {
-        console.error('ensureFullSnapshot error:', e);
-        if (!silent) { try { UIkit.notification(`❌ Gagal mengambil snapshot awal: ${e.message || e}`, { status: 'danger' }); } catch(_) {} }
-        return false;
-      } finally {
-        if (!overlayVisible) hideOverlay();
-      }
-    }
-
     async function ensureChainSnapshot(chainKey, options = {}) {
       const { silent = false, force = false } = options;
       const key = String(chainKey || '').toLowerCase();
@@ -334,7 +300,10 @@
       const snap = loadSnapshot();
       const existing = Array.isArray(snap[key]) ? snap[key] : [];
       if (!force && existing.length) return existing.length;
-      const dataUrl = getChainDataUrl(key) || SNAPSHOT_SEED_URL;
+      
+      // Prioritaskan URL spesifik chain dari config.js
+      const dataUrl = getChainDataUrl(key);
+
       if (!dataUrl || !/^https?:\/\//i.test(dataUrl)) return 0;
       const overlayVisible = $('#snapshot-overlay').is(':visible');
       if (!silent && !overlayVisible) {
@@ -482,7 +451,7 @@
       // Pastikan ada data snapshot, jika tidak ada, fetch dari seed JSON.
       // Fungsi ini sekarang hanya memastikan data untuk chain spesifik ada,
       // setelah ensureFullSnapshot() kemungkinan sudah mengisi semuanya.
-      await ensureChainSnapshot(chainKey, { silent: true });
+      await ensureChainSnapshot(chainKey, { silent: initial });
       buildCexChips();
       await renderLocalSnapshot(chainKey, { fetchPrices: false, silent: true }); // Always silent on data render
     }
@@ -494,8 +463,6 @@
       snapshotInitTriggered = true;
       const initialChain = syncChainControls();
       uiInitializing = (async () => {
-        // Langkah 1: Pastikan database terisi penuh saat pertama kali.
-        await ensureFullSnapshot({ silent: true });
         await loadChainData(true, initialChain); // Pass initialChain to ensure correct first load
         uiInitialized = true;
         const done = true;
@@ -522,13 +489,27 @@
       }
     }
     function normalizeRecord(it, chainFallback){
-      const chain = String(it.chain || chainFallback || '').trim().toLowerCase();
-      const name = String(it.name ?? it.token ?? '').trim();
-      const ticker = String((it.ticker ?? it.symbol ?? it.koin ?? '')||'').toUpperCase();
-      const sc = String(it.sc ?? it.contract ?? it.address ?? '').trim();
-      const des = (it.des ?? it.decimals ?? '');
-      const cex = String((it.cex ?? it.exchange ?? '-')||'').toUpperCase();
-      return { chain, name, ticker, sc, des, cex };
+      // Cek format baru (symbol_in, sc_in, des_in)
+      if (it.symbol_in && it.sc_in) {
+        const chain = String(it.chain || chainFallback || '').trim().toLowerCase();
+        const ticker = String(it.symbol_in || '').toUpperCase();
+        const name = String(it.name || ticker).trim(); // Gunakan nama jika ada, jika tidak, gunakan ticker
+        const sc = String(it.sc_in || '').trim();
+        const des = it.des_in ?? '';
+        const cex = String(it.cex || '-').toUpperCase();
+        return { chain, name, ticker, sc, des, cex };
+      }
+      
+      // Fallback ke format lama
+      else {
+        const chain = String(it.chain || chainFallback || '').trim().toLowerCase();
+        const name = String(it.name ?? it.token ?? '').trim();
+        const ticker = String((it.ticker ?? it.symbol ?? it.koin ?? '')||'').toUpperCase();
+        const sc = String(it.sc ?? it.contract ?? it.address ?? '').trim();
+        const des = (it.des ?? it.decimals ?? '');
+        const cex = String((it.cex ?? it.exchange ?? '-')||'').toUpperCase();
+        return { chain, name, ticker, sc, des, cex };
+      }
     }
     async function applySeedObject(obj, onlyChainKey){
       if (!obj || typeof obj !== 'object') throw new Error('Format JSON tidak valid');
@@ -549,7 +530,11 @@
 
       // If array provided at root
       if (Array.isArray(root)){
-        root.forEach(it => { const rec = normalizeRecord(it, it.chain); pushRec(rec); });
+        // Perbaikan: Gunakan 'onlyChainKey' sebagai fallback jika 'it.chain' tidak ada.
+        // Ini penting untuk format JSON baru yang berupa array.
+        root.forEach(it => { 
+          const rec = normalizeRecord(it, it.chain || onlyChainKey); pushRec(rec); 
+        });
       } else {
         // Object keyed by chain
         Object.keys(root||{}).forEach(chainKey => {
@@ -971,6 +956,30 @@
       }
     }
 
+    /**
+     * Helper untuk memperkaya data CEX dengan desimal.
+     * Mencari di database dulu, jika tidak ada baru ke Web3.
+     */
+    async function enrichWithDecimals(item, chainKey, snapBySc) {
+      if (!item || !item.sc) return item;
+
+      const scLower = String(item.sc).toLowerCase();
+      const snapIt = snapBySc.get(scLower);
+
+      let decimals = snapIt?.des ?? snapIt?.decimals;
+
+      // Jika desimal tidak ditemukan di snapshot, coba fetch via Web3
+      if (decimals === undefined || decimals === '' || decimals === null) {
+        const fetchedDecimals = await getDecimals(chainKey, item.sc);
+        if (fetchedDecimals !== null) {
+          decimals = fetchedDecimals;
+          // Pacing untuk menghindari rate-limit RPC
+          await new Promise(r => setTimeout(r, RATE.WEB3_DELAY_MS));
+        }
+      }
+      return { ...item, decimals: decimals ?? '' };
+    }
+
     // Fetchers: return [{ cex, chain, token, symbol, sc, decimals, deposit, withdraw, feeWD }]
     const fetchers = {
       async BINANCE(chainKey){
@@ -1274,6 +1283,9 @@
       updateOverlayProgress(0);
 
       try {
+        // Buat index dari snapshot saat ini untuk pencarian desimal yang efisien
+        const snapBySc = getSnapshotIndexBySc(chainKey);
+
         // Loop melalui setiap CEX yang dipilih
         for (let i = 0; i < selectedCex.length; i++) {
           const cex = selectedCex[i];
@@ -1288,12 +1300,17 @@
           try {
             // Panggil fetcher untuk CEX ini dan chain yang dipilih
             const results = await fetcher(chainKey);
+            const enrichedResults = [];
+
+            // Perkaya setiap hasil dengan desimal menggunakan logika baru
+            for (const rec of results) {
+              const enrichedRec = await enrichWithDecimals(rec, chainKey, snapBySc);
+              enrichedResults.push(enrichedRec);
+            }
 
             // Simpan (upsert) setiap hasil ke database
-            results.forEach(rec => {
-              if (rec && rec.sc) { // Hanya simpan jika ada smart contract
-                upsertSnapshot(chainKey, rec);
-              }
+            enrichedResults.forEach(rec => {
+              if (rec && rec.sc) { upsertSnapshot(chainKey, rec); }
             });
 
             UIkit.notification(`✅ ${cex}: ${results.length} token disinkronkan`, { status: 'success' });
@@ -1339,6 +1356,21 @@
       }
     }
 
+    function getSnapshotIndexBySc(chainKey) {
+      const snap = loadSnapshot();
+      const key = String(chainKey || '').toLowerCase();
+      const arr = Array.isArray(snap[key]) ? snap[key] : [];
+      const map = new Map();
+      arr.forEach(it => {
+        const sc = String(it.sc || '').toLowerCase();
+        if (sc) {
+          // Last write wins, which is fine for this purpose.
+          map.set(sc, it);
+        }
+      });
+      return map;
+    }
+
     $('#snapshot-btn-fetch').on('click', fetchAll);
 
   window.SnapshotModule = {
@@ -1351,8 +1383,6 @@
       snapshotInitTriggered = true;
       const key = syncChainControls();
       const initResult = await initializeUI(true);
-      // Jika UI sudah diinisialisasi sebelumnya, pastikan data penuh tetap dicek
-      if (!initResult) await ensureFullSnapshot({ silent: true });
       if (!initResult) {
         await loadChainData(false, key);
       }

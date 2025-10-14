@@ -280,8 +280,8 @@
 <section id="snapshot-view" class="uk-card uk-card-default uk-padding-small uk-card-hover" style="display:none; border:1px solid black;">
    
 
-    <div class="uk-card uk-card-default uk-card-body">
-      <div class="uk-text-bold uk-margin-small">SNAPSHOT KOIN: SILAKAN PILIH EXCHANGER</div>
+    <div class="uk-card uk-card-default">
+      <div class="uk-text-bold ">SNAPSHOT KOIN: SILAKAN PILIH EXCHANGER</div>
       
 
       <div class="uk-grid-small" uk-grid>
@@ -515,7 +515,7 @@
     <!-- HEADER -->
     <div class="uk-modal-header uk-flex uk-flex-between uk-flex-middle uk-padding-small">
       <div>
-        <h4 class="uk-modal-title uk-margin-remove"><span uk-icon="move"></span> Sinkronisasi Koin dari SERVER</h4>
+        <h4 class="uk-modal-title uk-margin-remove"><span uk-icon="move"></span> Sinkronisasi Koin</h4>
         <p class="uk-text-meta uk-margin-remove-top">Pilih CEX, Pair, lalu masukkan modal tiap DEX</p>
       </div>
       <button class="uk-modal-close-default" type="button" uk-close></button>
@@ -530,10 +530,10 @@
           <button class="uk-button uk-button-small uk-button-default" data-source="snapshot">Snapshot</button>
         </div>
       </div>
-      <div class="uk-grid-small uk-child-width-1-2@m uk-child-width-1-1" uk-grid>
+      <div class="uk-grid-small" uk-grid>
 
         <!-- Kolom kiri -->
-        <div>
+        <div class="uk-width-1-3@m">
           <div class="uk-card uk-card-default uk-card-body uk-padding-small">
             <h6 class="uk-heading-bullet uk-margin-small">1. Pilih CEX</h6>
             <div id="sync-filter-cex" class="uk-flex uk-flex-wrap" style="gap:6px; max-height:200px; overflow:auto;"></div>
@@ -547,7 +547,7 @@
         </div>
 
         <!-- Kolom kanan -->
-        <div>
+        <div class="uk-width-2-3@m">
           <div class="uk-card uk-card-default uk-card-body uk-padding-small">
             <h6 class="uk-margin-small">4. Pilih Koin Hasil Filter</h6>
             <input id="sync-search-input" class="uk-input uk-form-small uk-margin-small" type="text" placeholder="Cari koin...">
@@ -562,6 +562,8 @@
                     <th style="width:32px;">✓</th>
                     <th>Symbol</th>
                     <th>Pair</th>
+                    <th>SC</th>
+                    <th>Des</th>
                     <th>CEX</th>
                   </tr>
                 </thead>

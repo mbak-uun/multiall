@@ -2577,6 +2577,9 @@ $(document).ready(function() {
             const symIn = String(token.symbol_in || '').toUpperCase();
             const symOut = String(token.symbol_out || '').toUpperCase();
             const mappedPair = pairDefs[symOut] ? symOut : 'NON';
+            const scIn = String(token.sc_in || token.contract_in || '');
+            const desIn = token.des_in ?? token.decimals_in ?? token.des ?? token.dec_in ?? '';
+
             // Cek apakah koin sudah ada di database (per-chain)
             const saved = (Array.isArray(savedTokens) ? savedTokens : []).find(s => {
                 const inMatch  = String(s.symbol_in || '').toUpperCase() === symIn;
@@ -2601,6 +2604,8 @@ $(document).ready(function() {
                     <td><input type="checkbox" class="uk-checkbox sync-token-checkbox" data-index="${baseIndex}" data-pair="${symOut}" data-source="${source}" ${isChecked ? 'checked' : ''} ${isChecked ? 'data-saved="1"' : ''}></td>
                     <td>${symIn}${statusBadge}${sourceBadge}</td>
                     <td>${symOut}${pairBadge}</td>
+                    <td class="uk-text-small mono" title="${scIn}">${String(scIn).slice(0, 6)}...${String(scIn).slice(-4)}</td>
+                    <td class="uk-text-center">${desIn}</td>
                     <td>${cexUp}</td>
                 </tr>`;
             modalBody.append(row);
