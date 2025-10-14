@@ -1,7 +1,7 @@
 
 const CONFIG_APP = {
     APP: {
-        NAME: "MULTIALL-PLUS[BETA]",
+        NAME: "MULTIALL_PLUS-BETA",
         VERSION: "1.0"
     }
 };
@@ -545,41 +545,41 @@ const CONFIG_DEXS = {
         },
         allowFallback: false,
     },
-    '1inch': {
-        label: '1inch',
-        badgeClass: 'bg-1inch',
+    // '1inch': {
+    //     label: '1inch',
+    //     badgeClass: 'bg-1inch',
         
-        warna: "#b41313ff", // biru tua 1inch
-        builder: ({ chainCode, tokenAddress, pairAddress }) => 
-            `https://app.1inch.io/advanced/swap?network=${chainCode}&src=${tokenAddress}&dst=${pairAddress}`,
-        // Rute fetch per arah (utama + alternatif)
-        fetchdex: {
-            primary: {
-                tokentopair: '1inch',
-                pairtotoken: 'swoop'
-            } ,
-             allowFallback: false,
-        },
-        // allowFallback intentionally disabled untuk 1inch direct; fallback diatur oleh fetchdex
-    },
+    //     warna: "#b41313ff", // biru tua 1inch
+    //     builder: ({ chainCode, tokenAddress, pairAddress }) => 
+    //         `https://app.1inch.io/advanced/swap?network=${chainCode}&src=${tokenAddress}&dst=${pairAddress}`,
+    //     // Rute fetch per arah (utama + alternatif)
+    //     fetchdex: {
+    //         primary: {
+    //             tokentopair: '1inch',
+    //             pairtotoken: 'swoop'
+    //         } ,
+    //          allowFallback: false,
+    //     },
+    //     // allowFallback intentionally disabled untuk 1inch direct; fallback diatur oleh fetchdex
+    // },
 
-    fly: {
-        label: 'FLY',
-        badgeClass: 'bg-fly',
-        proxy: true,
-        warna: "#ba28f9ff", // fly teal
-        builder: ({ chainName, tokenAddress, pairAddress }) => {
-            const net = String(chainName || '').toLowerCase() || 'ethereum';
-            return `https://app.fly.trade/swap/${net}/${String(tokenAddress).toLowerCase()}/${net}/${String(pairAddress).toLowerCase()}`;
-        },
-        fetchdex: {
-            primary: {
-                tokentopair: 'fly',
-                pairtotoken: 'fly'
-            }
-        },
-        allowFallback: false,
-    },
+    // fly: {
+    //     label: 'FLY',
+    //     badgeClass: 'bg-fly',
+    //     proxy: true,
+    //     warna: "#ba28f9ff", // fly teal
+    //     builder: ({ chainName, tokenAddress, pairAddress }) => {
+    //         const net = String(chainName || '').toLowerCase() || 'ethereum';
+    //         return `https://app.fly.trade/swap/${net}/${String(tokenAddress).toLowerCase()}/${net}/${String(pairAddress).toLowerCase()}`;
+    //     },
+    //     fetchdex: {
+    //         primary: {
+    //             tokentopair: 'fly',
+    //             pairtotoken: 'fly'
+    //         }
+    //     },
+    //     allowFallback: false,
+    // },
     paraswap: {
         label: 'ParaSwap',
         badgeClass: 'bg-paraswap',

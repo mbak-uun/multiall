@@ -25,6 +25,8 @@ function computeActiveDexList() {
 }
 
 // Build a normalized column specification for the monitoring table header
+// Column structure: ORDERBOOK (left) → DEX columns (left, dynamic count) → DETAIL TOKEN → DEX columns (right, dynamic count) → ORDERBOOK (right)
+// Total columns = 1 + dexList.length + 1 + dexList.length + 1
 function getMonitoringColumnSpec(dexList) {
   const spec = [];
   spec.push({ type: 'orderbook-left', label: 'ORDERBOOK', classes: 'uk-text-center uk-text-bolder th-orderbook' });
@@ -211,7 +213,9 @@ function loadKointoTable(filteredData, tableBodyId = 'dataTableBody') {
         // Disable the correct start button based on the table being rendered
         $('#startSCAN').prop('disabled', true);
 
-        if ($tableBody.length) $tableBody.html('<tr><td colspan="11" class="uk-text-center">No tokens to display.</td></tr>');
+        // Calculate dynamic colspan: 1 (orderbook left) + dexList.length (left DEX slots) + 1 (detail) + dexList.length (right DEX slots) + 1 (orderbook right)
+        const totalCols = 1 + dexList.length + 1 + dexList.length + 1;
+        if ($tableBody.length) $tableBody.html(`<tr><td colspan="${totalCols}" class="uk-text-center">No tokens to display.</td></tr>`);
         return;
     }
 
