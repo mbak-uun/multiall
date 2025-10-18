@@ -1,7 +1,7 @@
 
 const CONFIG_APP = {
     APP: {
-        NAME: "MULTIPLUS-DEV",
+        NAME: "MULTIALL-PLUS",
         VERSION: "2.0"
     }
 };
