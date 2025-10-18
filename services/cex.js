@@ -475,8 +475,9 @@
   }
 
   /** Merge centralized CEX wallet statuses into per-token dataCexs. */
-  function applyWalletStatusToTokenList(tokenListName) {
-      const allWalletStatus = getFromLocalStorage('CEX_WALLET_STATUS', {});
+  function applyWalletStatusToTokenList(tokenListName, walletStatusMap, options) {
+      const opts = options || {};
+      const allWalletStatus = walletStatusMap || getFromLocalStorage('CEX_WALLET_STATUS', {});
       if (Object.keys(allWalletStatus).length === 0) {
           /* debug logs removed */
           return;
@@ -484,7 +485,7 @@
 
       let tokens = getFromLocalStorage(tokenListName, []);
       if (!tokens || tokens.length === 0) {
-          infoAdd(`ℹ️ No tokens found in '${tokenListName}' to update.`);
+          if (!opts.quiet) infoAdd(`ℹ️ No tokens found in '${tokenListName}' to update.`);
           return;
       }
 
@@ -536,32 +537,12 @@
       });
 
       saveToLocalStorage(tokenListName, updatedTokens);
-      infoAdd(`💾 ${updatedTokens.length} tokens in '${tokenListName}' were updated.`);
+      if (!opts.quiet) infoAdd(`💾 ${updatedTokens.length} tokens in '${tokenListName}' were updated.`);
   }
 
   /** Orchestrate fetching all CEX wallet statuses and apply to tokens. */
   async function checkAllCEXWallets() {
-      $('#loadingOverlay').fadeIn(150);
       infoSet('🚀 Memulai pengecekan DATA CEX...');
-      // Prepare overlay progress UI (create once)
-      try {
-          const $ov = $('#loadingOverlay .uk-position-center');
-          if ($ov.length) {
-              // Title text element (reuse existing <p>)
-              let $title = $ov.find('p.wallet-title');
-              if ($title.length === 0) {
-                  // Turn existing <p> into wallet-title if found, else create
-                  const $p = $ov.find('p').first();
-                  if ($p.length) { $p.addClass('wallet-title'); $title = $p; }
-                  else { $title = $('<p class="wallet-title uk-margin-small-top"></p>').appendTo($ov); }
-              }
-              // Progress bar + counter
-              if ($ov.find('#walletProgress').length === 0) {
-                  $ov.append('<progress id="walletProgress" class="uk-progress uk-margin-small-top" value="0" max="1"></progress>');
-                  $ov.append('<div id="walletCounter" class="uk-text-meta uk-margin-small-top">0 / 0 (0%)</div>');
-              }
-          }
-      } catch(_) {}
 
       // Hanya CEX yang dicentang pada filter (tanpa fallback ke semua)
       let selectedCexes = [];
@@ -580,27 +561,30 @@
       if (!selectedCexes.length) {
           infoSet('⚠ Pilih minimal 1 CEX pada filter.');
           try { UIkit.notification({ message: 'Pilih minimal 1 CEX pada filter (chip CEX).', status: 'warning' }); } catch(_) {}
-          $('#loadingOverlay').fadeOut(150);
           return;
       }
 
+      // Show AppOverlay progress
+      const overlayId = AppOverlay.showProgress({
+          id: 'cex-wallet-check',
+          title: 'Updating CEX Wallets',
+          message: 'Fetching wallet data from exchanges...',
+          progressMax: selectedCexes.length
+      });
+
       const aggregated = [];
       const failed = [];
-      // Init overlay progress max
-      try { $('#walletProgress').attr('max', selectedCexes.length).val(0); $('#walletCounter').text(`0 / ${selectedCexes.length} (0%)`); } catch(_) {}
+
       for (let i = 0; i < selectedCexes.length; i++) {
           const cex = String(selectedCexes[i]);
           try {
               const cur = i + 1;
               const total = selectedCexes.length;
               infoSet(`🔄 Mengambil data wallet: ${cex} (${cur}/${total})...`);
-              try {
-                  // Update overlay title and progress
-                  const pct = Math.floor((cur - 1) / total * 100);
-                  $('#loadingOverlay .wallet-title').text(`Updating Wallets: ${cex} (${cur}/${total})`);
-                  $('#walletProgress').val(cur - 1);
-                  $('#walletCounter').text(`${cur - 1} / ${total} (${pct}%)`);
-              } catch(_) {}
+
+              // Update AppOverlay progress
+              AppOverlay.updateProgress(overlayId, cur - 1, total, `Fetching ${cex}...`);
+
               const res = await fetchWalletStatus(cex);
               aggregated.push(res);
               infoAdd(`✅ ${cex} selesai.`);
@@ -609,15 +593,11 @@
               failed.push({ error: true, cex, message: err.message });
               infoAdd(`❌ ${cex} GAGAL (${err.message})`);
           }
-          // Step progress after each CEX completes
-          try {
-              const done = i + 1;
-              const total = selectedCexes.length;
-              const pct = Math.floor((done / total) * 100);
-              $('#loadingOverlay .wallet-title').text(`Updating Wallets: ${cex} (${done}/${total})`);
-              $('#walletProgress').val(done);
-              $('#walletCounter').text(`${done} / ${total} (${pct}%)`);
-          } catch(_) {}
+
+          // Update progress after completion
+          const done = i + 1;
+          const total = selectedCexes.length;
+          AppOverlay.updateProgress(overlayId, done, total, `Completed ${cex}`);
       }
 
       // Build aggregated status map from successful CEX calls
@@ -689,13 +669,22 @@
               { error: 'All CEX updates failed', fail: failed.length, failedCex: failedList }
             );
           } catch(_) {}
-          $('#loadingOverlay').fadeOut(150);
+          AppOverlay.hide(overlayId);
           return;
       }
 
       try {
-          const key = (typeof getActiveTokenKey === 'function') ? getActiveTokenKey() : 'TOKEN_MULTICHAIN';
-          applyWalletStatusToTokenList(key);
+          const activeKey = (typeof getActiveTokenKey === 'function') ? getActiveTokenKey() : 'TOKEN_MULTICHAIN';
+          const tokenStores = new Set([activeKey, 'TOKEN_MULTICHAIN']);
+          try {
+              Object.keys(CONFIG_CHAINS || {}).forEach(chainKey => {
+                  tokenStores.add(`TOKEN_${String(chainKey).toUpperCase()}`);
+              });
+          } catch(_) {}
+          tokenStores.forEach(storeKey => {
+              const quiet = storeKey !== activeKey;
+              applyWalletStatusToTokenList(storeKey, walletStatusByCex, { quiet });
+          });
       } catch(_) {}
 
       try {
@@ -706,10 +695,26 @@
           { ok: aggregated.length, fail: failed.length, failedCex: failedList }
         );
       } catch(_) {}
+
       try {
           UIkit.notification({ message: '✅ BERHASIL UPDATE WALLET EXCHANGER', status: 'success' });
       } catch(_) { alert('✅ SEBAGIAN BERHASIL UPDATE WALLET EXCHANGER,SILAKAN CEK STATUS DEPOSIT & WITHDRAW, EXCHANGER YANG GAGAL UPDATE'); }
 
+      // Hide AppOverlay
+      AppOverlay.hide(overlayId);
+
+      // Emit event untuk refresh UI (tanpa reload)
+      try {
+          if (typeof AppEvents !== 'undefined') {
+              AppEvents.emit(AppEvents.EVENTS.WALLET_UPDATE, {
+                  aggregated,
+                  failed,
+                  selectedCexes
+              });
+          }
+      } catch(_) {}
+
+      // Refresh UI tanpa reload
       try {
           const m = (typeof getAppMode === 'function') ? getAppMode() : { type: 'multi' };
           if (m.type === 'single') {
@@ -719,11 +724,23 @@
           }
       } catch(_) { if (typeof refreshTokensTable === 'function') refreshTokensTable(); }
 
-      $('#loadingOverlay').fadeOut(150);
+      // Refresh wallet exchanger UI if visible
+      try {
+          if ($('#update-wallet-section').is(':visible') && root.App?.WalletExchanger?.renderCexCards) {
+              setTimeout(() => {
+                  root.App.WalletExchanger.renderCexCards();
 
-      // Reload the page after successful update to ensure all views reflect changes
-      // Slightly longer delay to allow async IDB writes (history, wallet status) to settle
-      try { if (aggregated.length > 0) setTimeout(() => location.reload(), 800); } catch(_) {}
+                  // Show update result notification
+                  const failedList = failed.map(f => String(f.cex||'').toUpperCase());
+                  const hasSuccess = aggregated.length > 0;
+                  if (root.App?.WalletExchanger?.showUpdateResult) {
+                      root.App.WalletExchanger.showUpdateResult(hasSuccess, failedList);
+                  }
+
+                  infoSet('✅ Tampilan diperbarui. Anda dapat melihat hasil update wallet exchanger di bawah ini.');
+              }, 300);
+          }
+      } catch(_) {}
   }
 
   // Register to App namespace
